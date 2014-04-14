@@ -11,6 +11,11 @@
 #ifndef _MAX98090_H
 #define _MAX98090_H
 
+/* If using a digital microphone then set FS_DMIC_TARGET to the desired
+ * operating frequency in Hertz
+ */
+#define FS_DMIC_TARGET	2500000
+
 /*
  * MAX98090 Register Definitions
  */
@@ -1518,6 +1523,7 @@ struct max98090_priv {
 	struct max98090_pdata *pdata;
 	struct clk *mclk;
 	unsigned int sysclk;
+	unsigned int pclk;
 	unsigned int bclk;
 	unsigned int lrclk;
 	struct max98090_cdata dai[1];
