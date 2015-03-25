@@ -833,7 +833,7 @@ static ssize_t store_min_sample_time(struct kobject *kobj,
 	int ret;
 	unsigned long val;
 
-	ret = strict_strtoul(buf, 0, &val);
+	ret = kstrtoul(buf, 0, &val);
 	if (ret < 0)
 		return ret;
 	min_sample_time = val;
@@ -855,7 +855,7 @@ static ssize_t store_timer_rate(struct kobject *kobj,
 	int ret;
 	unsigned long val;
 
-	ret = strict_strtoul(buf, 0, &val);
+	ret = kstrtoul(buf, 0, &val);
 	if (ret < 0)
 		return ret;
 	timer_rate = val;
@@ -877,7 +877,7 @@ static ssize_t store_input_boost(struct kobject *kobj, struct attribute *attr,
 	int ret;
 	unsigned long val;
 
-	ret = strict_strtoul(buf, 0, &val);
+	ret = kstrtoul(buf, 0, &val);
 	if (ret < 0)
 		return ret;
 	input_boost_val = val;
