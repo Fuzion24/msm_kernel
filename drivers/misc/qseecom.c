@@ -314,6 +314,7 @@ static int qseecom_register_listener(struct qseecom_dev_handle *data,
 	}
 	data->listener.id = 0;
 	data->type = QSEECOM_LISTENER_SERVICE;
+	//Checking that the listener ID is unique
 	if (!__qseecom_is_svc_unique(data, &rcvd_lstnr)) {
 		pr_err("Service is not unique and is already registered\n");
 		data->released = true;
@@ -841,7 +842,10 @@ static int qseecom_unload_app(struct qseecom_dev_handle *data)
 static uint32_t __qseecom_uvirt_to_kphys(struct qseecom_dev_handle *data,
 						uint32_t virt)
 {
-	return data->client.sb_phys + (virt - data->client.user_virt_sb_base);
+	uint32_t phys_addr = data->client.sb_phys + (virt - data->client.user_virt_sb_base);
+    pr_err("Converting virtual address %08X to physical %08X (sb_phys: %08X, user_virt_sb_base: %08X)\n",
+           virt, phys_addr, data->client.sb_phys, data->client.user_virt_sb_base);
+    return phys_addr;
 }
 
 int __qseecom_process_rpmb_svc_cmd(struct qseecom_dev_handle *data_ptr,
@@ -974,6 +978,19 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 		return -ENOMEM;
 	}
 
+    {
+        size_t i;
+        char* buffer = kmalloc(2*req->cmd_req_len+1, GFP_ATOMIC);
+        buffer[0] = '\0';
+        for (i=0; i<req->cmd_req_len; i++) {
+                char sub_buf[3];
+                sprintf(sub_buf, "%02X", ((unsigned char*)req->cmd_req_buf)[i]);
+                strcat(buffer, sub_buf);
+        }
+        printk(KERN_INFO "CONTENT OF SEND CMD: %s\n", buffer);
+        kfree(buffer);
+    }
+
 	send_data_req.qsee_cmd_id = QSEOS_CLIENT_SEND_DATA_COMMAND;
 	send_data_req.app_id = data->client.app_id;
 	send_data_req.req_ptr = (void *)(__qseecom_uvirt_to_kphys(data,
@@ -982,6 +999,9 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 	send_data_req.rsp_ptr = (void *)(__qseecom_uvirt_to_kphys(data,
 					(uint32_t)req->resp_buf));
 	send_data_req.rsp_len = req->resp_len;
+
+    pr_err("Request pointer physical address: %p\n", send_data_req.req_ptr);
+    pr_err("Response pointer physical address: %p\n", send_data_req.rsp_ptr);
 
 	msm_ion_do_cache_op(qseecom.ion_clnt, data->client.ihandle,
 					data->client.sb_virt,
@@ -1013,6 +1033,7 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 	msm_ion_do_cache_op(qseecom.ion_clnt, data->client.ihandle,
 				data->client.sb_virt, data->client.sb_length,
 				ION_IOC_INV_CACHES);
+
 	return ret;
 }
 
@@ -1047,8 +1068,11 @@ static int __qseecom_update_cmd_buf(struct qseecom_send_modfd_cmd_req *req,
 	uint32_t len = 0;
 	struct scatterlist *sg;
 
+    pr_err("Entring update_cmd_buf!\n");
+
 	for (i = 0; i < MAX_ION_FD; i++) {
 		struct sg_table *sg_ptr = NULL;
+        pr_err("i=%d, fd=%d\n", i, req->ifd_data[i].fd);
 		if (req->ifd_data[i].fd > 0) {
 			/* Get the handle of the shared fd */
 			ihandle = ion_import_dma_buf(qseecom.ion_clnt,
@@ -1057,8 +1081,10 @@ static int __qseecom_update_cmd_buf(struct qseecom_send_modfd_cmd_req *req,
 				pr_err("Ion client can't retrieve the handle\n");
 				return -ENOMEM;
 			}
+            pr_err("Got handle\n");
 			field = (char *) req->cmd_req_buf +
 						req->ifd_data[i].cmd_buf_offset;
+            pr_err("Field ptr: %p\n", field);
 
 			/* Populate the cmd data structure with the phys_addr */
 			sg_ptr = ion_sg_table(qseecom.ion_clnt, ihandle);
@@ -1076,9 +1102,11 @@ static int __qseecom_update_cmd_buf(struct qseecom_send_modfd_cmd_req *req,
 					sg_ptr->nents, QSEECOM_MAX_SG_ENTRY);
 				goto err;
 			}
+            pr_err("Got SG PTR, and nents is %d\n", sg_ptr->nents);
 			sg = sg_ptr->sgl;
 			if (sg_ptr->nents == 1) {
 				uint32_t *update;
+                pr_err("In nents=1 case\n");
 				update = (uint32_t *) field;
 				if (cleanup)
 					*update = 0;
@@ -1089,6 +1117,7 @@ static int __qseecom_update_cmd_buf(struct qseecom_send_modfd_cmd_req *req,
 			} else {
 				struct qseecom_sg_entry *update;
 				int j = 0;
+                pr_err("In \"else\" case\n");
 				update = (struct qseecom_sg_entry *) field;
 				for (j = 0; j < sg_ptr->nents; j++) {
 					if (cleanup) {
@@ -2567,6 +2596,50 @@ static int qseecom_save_partition_hash(void __user *argp)
 	return 0;
 }
 
+static int send_atomic_scm(void __user *argp)
+{
+    int ret = 0;
+	struct qseecom_send_atomic_scm_req req;
+	ret = copy_from_user(&req, argp, sizeof(req));
+	if (ret) {
+		pr_err("copy_from_user failed\n");
+		return ret;
+	}
+	pr_warning("Going to send atomic SCM request\n");
+    if (req.num_args == 1) {
+        ret = scm_call_atomic1(req.svc_id, req.cmd_id, req.arg1);
+    }
+    else if (req.num_args == 2) {
+        ret = scm_call_atomic2(req.svc_id, req.cmd_id, req.arg1, req.arg2);
+    }
+    else if (req.num_args == 3) {
+        ret = scm_call_atomic3(req.svc_id, req.cmd_id, req.arg1, req.arg2, req.arg3);
+    }
+    else if (req.num_args == 4) {
+        u32 ret1;
+        u32 ret2;
+        ret = scm_call_atomic4_3(req.svc_id, req.cmd_id, req.arg1, req.arg2, req.arg3, req.arg4, &ret1, &ret2);
+        pr_err("Atomic SCM RET1: %08X, RET2: %08X\n", ret1, ret2);
+    }
+	pr_warning("Finished raw SCM request\n");
+	return ret;
+}
+
+static int send_raw_scm(void __user *argp)
+{
+	int ret = 0;
+	struct qseecom_send_raw_scm_req req;
+	ret = copy_from_user(&req, argp, sizeof(req));
+	if (ret) {
+		pr_err("copy_from_user failed\n");
+		return ret;
+	}
+	pr_warning("Going to send raw SCM request (no remap error!)\n");
+	ret = scm_call_no_remap_error(req.svc_id, req.cmd_id, req.cmd_req_buf, req.cmd_req_len, req.resp_buf, req.resp_len);
+	pr_warning("Finished raw SCM request\n");
+	return ret;
+}
+
 static long qseecom_ioctl(struct file *file, unsigned cmd,
 		unsigned long arg)
 {
@@ -2797,6 +2870,22 @@ static long qseecom_ioctl(struct file *file, unsigned cmd,
 		mutex_unlock(&app_access_lock);
 		break;
 	}
+	case QSEECOM_IOCTL_SEND_RAW_SCM: {
+		atomic_inc(&data->ioctl_count);
+		ret = send_raw_scm(argp);
+		atomic_dec(&data->ioctl_count);
+    	flush_cache_all();
+	    outer_flush_all();
+		break;
+	}
+    case QSEECOM_IOCTL_SEND_ATOMIC_SCM: {
+		atomic_inc(&data->ioctl_count);
+		ret = send_atomic_scm(argp);
+		atomic_dec(&data->ioctl_count);
+    	flush_cache_all();
+	    outer_flush_all();        
+        break;
+    }
 	default:
 		return -EINVAL;
 	}

@@ -12,6 +12,7 @@
 #ifndef __MACH_SCM_H
 #define __MACH_SCM_H
 
+
 #define SCM_SVC_BOOT			0x1
 #define SCM_SVC_PIL			0x2
 #define SCM_SVC_UTIL			0x3
@@ -26,10 +27,16 @@
 #define SCM_SVC_ES			0x10
 #define SCM_SVC_TZSCHEDULER		0xFC
 
+
+
+
 #ifdef CONFIG_MSM_SCM
+extern int scm_call_with_command(u32 svc_id, u32 cmd_id, u32 len, u32 buf_offset, 
+                          u32 resp_hdr_offset);
 extern int scm_call(u32 svc_id, u32 cmd_id, const void *cmd_buf, size_t cmd_len,
 		void *resp_buf, size_t resp_len);
-
+extern int scm_call_no_remap_error(u32 svc_id, u32 cmd_id, const void *cmd_buf, size_t cmd_len,
+		void *resp_buf, size_t resp_len);
 extern s32 scm_call_atomic1(u32 svc, u32 cmd, u32 arg1);
 extern s32 scm_call_atomic2(u32 svc, u32 cmd, u32 arg1, u32 arg2);
 extern s32 scm_call_atomic3(u32 svc, u32 cmd, u32 arg1, u32 arg2, u32 arg3);

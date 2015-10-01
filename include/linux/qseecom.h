@@ -7,6 +7,28 @@
 #define MAX_ION_FD  4
 #define MAX_APP_NAME_SIZE  32
 #define QSEECOM_HASH_SIZE  32
+
+struct __attribute__((packed)) qseecom_send_raw_scm_req {
+        uint32_t svc_id;
+        uint32_t cmd_id;
+        void *cmd_req_buf; /* in */
+        unsigned int cmd_req_len; /* in */
+        void *resp_buf; /* in/out */
+        unsigned int resp_len; /* in/out */
+};
+
+struct __attribute__((packed)) qseecom_send_atomic_scm_req {
+    uint32_t svc_id;
+    uint32_t cmd_id;
+    uint32_t num_args;
+    uint32_t arg1;
+    uint32_t arg2;
+    uint32_t arg3;
+    uint32_t arg4;
+};
+
+
+
 /*
  * struct qseecom_register_listener_req -
  *      for register listener ioctl request
@@ -219,5 +241,12 @@ struct qseecom_is_es_activated_req {
 
 #define QSEECOM_IOCTL_IS_ES_ACTIVATED_REQ \
 	_IOWR(QSEECOM_IOC_MAGIC, 20, struct qseecom_is_es_activated_req)
+
+
+#define QSEECOM_IOCTL_SEND_RAW_SCM \
+        _IOWR(QSEECOM_IOC_MAGIC, 21, struct qseecom_send_raw_scm_req)
+
+#define QSEECOM_IOCTL_SEND_ATOMIC_SCM \
+        _IOWR(QSEECOM_IOC_MAGIC, 24, struct qseecom_send_atomic_scm_req)
 
 #endif /* __QSEECOM_H_ */
